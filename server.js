@@ -87,7 +87,7 @@ app.get('/health', (req, res) => {
  *
  * 요청:
  * {
- *   "base64Image": "iVBORw0KGgo..."
+ *   "base64Image": "/9j/4AAQ..." (순수 base64, data:image/jpeg;base64, prefix 제거)
  * }
  *
  * 응답:
@@ -114,13 +114,32 @@ app.post('/ocr', async (req, res) => {
 
     console.log(`[OCR] Requests remaining: ${rateLimit.remaining}/${rateLimit.total}`);
 
-    const { base64Image } = req.body;
+    let { base64Image } = req.body;
 
     // 입력 검증
     if (!base64Image || typeof base64Image !== 'string') {
       return res.status(400).json({
         success: false,
         error: 'base64Image is required and must be a string',
+      });
+    }
+
+    // data:image/jpeg;base64, prefix 제거
+    if (base64Image.includes(',')) {
+      console.log('[OCR] Detected data URI prefix, removing...');
+      base64Image = base64Image.split(',')[1];
+    }
+
+    // 로깅: base64 길이 및 시작 부분
+    console.log(`[OCR] Base64 image length: ${base64Image.length} bytes`);
+    console.log(`[OCR] Base64 image starts with: ${base64Image.substring(0, 50)}...`);
+
+    // Base64 유효성 검증
+    if (!/^[A-Za-z0-9+/=]+$/.test(base64Image)) {
+      console.error('[OCR] Invalid Base64 format detected');
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid Base64 format',
       });
     }
 
@@ -216,6 +235,7 @@ app.post('/ocr', async (req, res) => {
 
     const extractedText = responseData.textAnnotations[0].description || '';
     console.log('[OCR] Text extracted, length:', extractedText.length);
+    console.log('[OCR] Extracted text preview:', extractedText.substring(0, 200));
 
     // 농도 값 추출
     const numbers = extractConcentrationNumbers(extractedText);
